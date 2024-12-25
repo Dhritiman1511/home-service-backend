@@ -56,7 +56,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
     if (!booking) return res.status(404).json({ error: "Booking not found" });
 
     // Ensure only the booking owner or admin can update
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin" && req.user.role !== "service_provider") {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -90,6 +90,37 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 
     await booking.deleteOne();
     res.json({ message: "Booking deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update Booking Status
+router.patch("/:id/status", authMiddleware, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const bookingId = req.params.id;
+
+    // Validate status input (optional: enforce allowed statuses)
+    const allowedStatuses = ["pending", "confirmed", "completed", "cancelled"];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    // Ensure only the booking owner or admin can update the status
+    if (req.user.id !== booking.user.toString() && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Forbidden: Not authorized to update this booking" });
+    }
+
+    booking.status = status;
+    await booking.save();
+
+    res.json({ message: "Booking status updated successfully", booking });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

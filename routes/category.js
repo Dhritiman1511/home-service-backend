@@ -29,6 +29,18 @@ router.post('/', authMiddleware, roleMiddleware(['admin']), async (req, res) => 
   }
 });
 
+// Delete Category (Admin Only)
+router.delete('/:id', authMiddleware, roleMiddleware(['admin']), async (req, res) => {
+  try {
+    const deletedCategory = await Category.findByIdAndDelete(req.params.id);
+    if (!deletedCategory) return res.status(404).json({ error: 'Category not found' });
+    
+    res.json({ message: 'Category deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Update Category (Admin Only)
 router.put('/:id', authMiddleware, roleMiddleware(['admin']), async (req, res) => {
   try {
@@ -39,18 +51,6 @@ router.put('/:id', authMiddleware, roleMiddleware(['admin']), async (req, res) =
     if (!updatedCategory) return res.status(404).json({ error: 'Category not found' });
 
     res.json(updatedCategory);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Delete Category (Admin Only)
-router.delete('/:id', authMiddleware, roleMiddleware(['admin']), async (req, res) => {
-  try {
-    const deletedCategory = await Category.findByIdAndDelete(req.params.id);
-    if (!deletedCategory) return res.status(404).json({ error: 'Category not found' });
-
-    res.json({ message: 'Category deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

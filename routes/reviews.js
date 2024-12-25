@@ -46,5 +46,22 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ error: 'Review not found' });
+
+    // Ensure only the review author or an admin can delete the review
+    if (req.user.id !== review.user.toString() && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // Delete the review
+    await review.deleteOne();
+    res.json({ message: 'Review deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

@@ -14,10 +14,15 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
-// Middleware
-app.use(cors());
 app.use(cookieParser());
 app.use(express.json());
+
+const corsOptions = {
+  origin: '*',
+  credentials: true, // if you want to send cookies or authorization headers
+};
+
+app.use(cors(corsOptions));
 
 // Database connection
 mongoose.connect(process.env.MONGO_URI, {
