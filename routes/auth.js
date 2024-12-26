@@ -72,5 +72,24 @@ router.put('/role/:id', authMiddleware, roleMiddleware(['admin']), async (req, r
   }
 });
 
+// Get All Users
+router.get('/users', authMiddleware, roleMiddleware(['admin']), async (req, res) => {
+  try {
+    const users = await User.find({ role: 'user' });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get All Service Providers
+router.get('/service-providers', authMiddleware, roleMiddleware(['admin']), async (req, res) => {
+  try {
+    const serviceProviders = await User.find({ role: 'service_provider' });
+    res.json(serviceProviders);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

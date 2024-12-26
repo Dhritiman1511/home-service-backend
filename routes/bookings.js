@@ -113,7 +113,7 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
     }
 
     // Ensure only the booking owner or admin can update the status
-    if (req.user.id !== booking.user.toString() && req.user.role !== "admin") {
+    if (req.user.id !== booking.user.toString() && req.user.role !== "admin" && req.user.role !== "service_provider") {
       return res.status(403).json({ error: "Forbidden: Not authorized to update this booking" });
     }
 
@@ -121,6 +121,24 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
     await booking.save();
 
     res.json({ message: "Booking status updated successfully", booking });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Bookings by Service ID
+router.get("/service/:serviceId", authMiddleware,roleMiddleware(["admin","service_provider"]), async (req, res) => {
+  try {
+    const { serviceId } = req.params;
+
+    // Find bookings that match the given service ID
+    const bookings = await Booking.find({ service: serviceId }).populate("user").populate("service");
+
+    if (!bookings || bookings.length === 0) {
+      return res.status(404).json({ error: "No bookings found for this service" });
+    }
+
+    res.json(bookings);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,4 +1,5 @@
 const express = require("express");
+const User = require('../models/User'); // Ensure User model is imported
 const Service = require("../models/Service");
 const Category = require("../models/Category");
 const authMiddleware = require("../middleware/authMiddleware");
@@ -7,9 +8,31 @@ const roleMiddleware = require("../middleware/roleMiddleware");
 const router = express.Router();
 
 // Get All Services
+
 router.get("/", async (req, res) => {
-  const services = await Service.find();
-  res.json(services);
+  try {
+    // Fetch all services
+    const services = await Service.find();
+
+    // Fetch provider details for each service
+    const servicesWithProviderName = await Promise.all(
+      services.map(async (service) => {
+        // Find the provider using the provider's ID
+        const provider = await User.findById(service.provider);
+        const providerName = provider ? provider.name : "Unknown Provider";
+        
+        return {
+          ...service.toObject(),
+          providerName,
+        };
+      })
+    );
+
+    res.json(servicesWithProviderName);
+  } catch (err) {
+    console.error("Error fetching services:", err);
+    res.status(500).json({ error: "Unable to fetch services." });
+  }
 });
 
 // Create Service (Admin or Service Provider Only)
@@ -20,6 +43,9 @@ router.post(
   async (req, res) => {
     try {
       const { name, description, category, price, availability } = req.body;
+
+      // Ensure the provider is attached to the request object by the middleware
+      const providerId = req.user._id; // `req.user` is set by authMiddleware
 
       // Check if category exists in the database
       const categoryObj = await Category.findOne({ name: category });
@@ -34,6 +60,7 @@ router.post(
         category: categoryObj._id, // Use ObjectId of the category
         price,
         availability,
+        provider: providerId, // Assign the provider's ID
       });
 
       await service.save();
@@ -48,15 +75,24 @@ router.post(
 // Get Service by ID
 router.get("/:id", async (req, res) => {
   try {
-    // Find the service by its ObjectId
+    // Find the service by its ObjectId and populate the category
     const service = await Service.findById(req.params.id).populate("category");
 
     if (!service) {
       return res.status(404).json({ error: "Service not found" });
     }
 
-    // Send the service details in the response
-    res.json(service);
+    // Find the provider by its ID
+    const provider = await User.findById(service.provider);
+
+    // Add the provider name to the service object
+    const serviceWithProviderName = {
+      ...service.toObject(),
+      providerName: provider ? provider.name : "Unknown Provider"
+    };
+
+    // Send the service details along with provider name in the response
+    res.json(serviceWithProviderName);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -143,5 +179,24 @@ router.put(
     }
   }
 );
+
+// Get Services by Provider ID
+router.get("/provider/:providerId", async (req, res) => {
+  try {
+    console.log(req.params);
+    const { providerId } = req.params;
+    // Fetch services by provider ID
+    const services = await Service.find({ provider: providerId });
+
+    if (!services || services.length === 0) {
+      return res.status(404).json({ error: "No services found for this provider" });
+    }
+
+    res.json(services);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

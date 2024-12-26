@@ -15,6 +15,11 @@ const serviceSchema = new mongoose.Schema(
       enum: ["Available", "Unavailable"],
       required: true,
     }, // New field
+    provider: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    }
   },
   { timestamps: true } // Adds `createdAt` and `updatedAt`
 );
