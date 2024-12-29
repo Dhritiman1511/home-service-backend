@@ -8,6 +8,24 @@ const roleMiddleware = require("../middleware/roleMiddleware");
 const router = express.Router();
 
 // Get All Services
+router.get("/search", async (req, res) => {
+  const { name } = req.query;
+  try {
+    if (!name) {
+      return res.status(400).json({ error: "Service name is required" });
+    }
+    const services = await Service.find({ 
+      name: { $regex: name, $options: 'i' } 
+    }).populate('provider category');
+    
+    if (!services.length) {
+      return res.status(404).json({ error: "No services found" });
+    }
+    res.json(services);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 router.get("/", async (req, res) => {
   try {
@@ -198,5 +216,7 @@ router.get("/provider/:providerId", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Place this BEFORE any routes with :id parameters
 
 module.exports = router;
