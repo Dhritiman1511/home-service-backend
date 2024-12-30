@@ -117,22 +117,6 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// // Update Service (Admin or Service Provider Only)
-// router.put(
-//   '/:id',
-//   authMiddleware,
-//   roleMiddleware(['admin', 'service_provider']),
-//   async (req, res) => {
-//     try {
-//       const service = await Service.findByIdAndUpdate(req.params.id, req.body, { new: true });
-//       if (!service) return res.status(404).json({ error: 'Service not found' });
-//       res.json(service);
-//     } catch (err) {
-//       res.status(500).json({ error: err.message });
-//     }
-//   }
-// );
-
 // Delete Service (Admin Only)
 router.delete(
   "/:id",
@@ -217,6 +201,33 @@ router.get("/provider/:providerId", async (req, res) => {
   }
 });
 
-// Place this BEFORE any routes with :id parameters
+// Get Services by Category ID
+router.get("/category/:categoryId", async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+
+    // Validate if category exists
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    // Fetch services by category and populate provider details
+    const services = await Service.find({ category: categoryId }).populate("provider", "name");
+
+    // Return response with category name and services
+    res.json({
+      categoryName: category.name,
+      services: services.map((service) => ({
+        ...service.toObject(),
+        providerName: service.provider?.name || "Unknown Provider",
+      })),
+    });
+
+  } catch (err) {
+    console.error("Error fetching services by category:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 module.exports = router;
