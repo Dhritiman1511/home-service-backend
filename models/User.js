@@ -9,6 +9,9 @@ const userSchema = new mongoose.Schema(
     address: { type: String, required: true }, // New field
     phone: { type: String, required: true },   // New field
     role: { type: String, enum: ['user', 'admin', 'service_provider'], default: 'user' }, // Updated
+    profilePicture: { type: String }, // New field
+    accountStatus: { type: String, enum: ['active', 'suspended'], default: 'active' }, // New field
+    emailVerified: { type: Boolean, default: false },
   },
   { timestamps: true } // Automatically adds `createdAt` and `updatedAt`
 );

@@ -19,7 +19,7 @@ app.use(express.json());
 
 const corsOptions = {
   origin: '*',
-  credentials: true, // if you want to send cookies or authorization headers
+  credentials: true,
 };
 
 app.use(cors(corsOptions));

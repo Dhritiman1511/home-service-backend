@@ -19,7 +19,9 @@ const serviceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-    }
+    },
+    images: [{ type: String }],
+    averageRating: { type: Number, default: 0 }, // New field for average rating
   },
   { timestamps: true }
 );
