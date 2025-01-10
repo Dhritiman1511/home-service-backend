@@ -2,25 +2,119 @@ const express = require("express");
 const Booking = require("../models/Booking");
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
+const { bookingUpload, cloudinary } = require("../utils/uploadConfig");
 
 const router = express.Router();
 
-// Create Booking
-router.post("/", authMiddleware, async (req, res) => {
-  try {
-    const { service, scheduledDate, address, phone } = req.body;
-    const booking = new Booking({
-      user: req.user.id,
-      service,
-      scheduledDate,
-      address,
-      phone,
-    });
-    await booking.save();
-    res.status(201).json(booking);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+// Create Booking with images
+router.post("/", 
+  authMiddleware, 
+  bookingUpload.array('images', 5), // Allow up to 5 images
+  async (req, res) => {
+    try {
+      const { service, scheduledDate, address, phone } = req.body;
+      
+      // Get image URLs from uploaded files
+      const imageUrls = req.files ? req.files.map(file => file.path) : [];
+
+      const booking = new Booking({
+        user: req.user.id,
+        service,
+        scheduledDate,
+        address,
+        phone,
+        images: imageUrls
+      });
+      
+      await booking.save();
+      res.status(201).json(booking);
+    } catch (err) {
+      // Delete uploaded images if booking creation fails
+      if (req.files) {
+        for (const file of req.files) {
+          const publicId = file.path.split('/').pop().split('.')[0];
+          await cloudinary.uploader.destroy(publicId);
+        }
+      }
+      res.status(500).json({ error: err.message });
+    }
+});
+
+// Add images to existing booking
+router.post("/:id/images",
+  authMiddleware,
+  bookingUpload.array('images', 5),
+  async (req, res) => {
+    try {
+      const booking = await Booking.findById(req.params.id);
+      if (!booking) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      // Check if user is authorized
+      if (booking.user.toString() !== req.user.id && 
+          req.user.role !== 'admin' && 
+          req.user.role !== 'service_provider') {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      // Get new image URLs
+      const newImageUrls = req.files.map(file => file.path);
+
+      // Add new images to existing ones
+      booking.images = [...booking.images, ...newImageUrls];
+      await booking.save();
+
+      res.json(booking);
+    } catch (err) {
+      // Delete uploaded images if updating fails
+      if (req.files) {
+        for (const file of req.files) {
+          const publicId = file.path.split('/').pop().split('.')[0];
+          await cloudinary.uploader.destroy(publicId);
+        }
+      }
+      res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete booking image
+router.delete("/:bookingId/images/:imageIndex",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const { bookingId, imageIndex } = req.params;
+      const booking = await Booking.findById(bookingId);
+      
+      if (!booking) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      // Check if user is authorized
+      if (booking.user.toString() !== req.user.id && 
+          req.user.role !== 'admin' && 
+          req.user.role !== 'service_provider') {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      // Check if image exists
+      if (!booking.images[imageIndex]) {
+        return res.status(404).json({ error: "Image not found" });
+      }
+
+      // Delete image from Cloudinary
+      const imageUrl = booking.images[imageIndex];
+      const publicId = imageUrl.split('/').pop().split('.')[0];
+      await cloudinary.uploader.destroy(publicId);
+
+      // Remove image from booking
+      booking.images.splice(imageIndex, 1);
+      await booking.save();
+
+      res.json({ message: "Image deleted successfully", booking });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
 });
 
 // Get All Bookings (Admin Only)

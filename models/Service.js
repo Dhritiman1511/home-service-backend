@@ -20,6 +20,7 @@ const serviceSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    icon: { type: String},  //icon
     images: [{ type: String }],
     averageRating: { type: Number, default: 0 }, // New field for average rating
   },

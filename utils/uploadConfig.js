@@ -10,13 +10,42 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Cloudinary storage configuration
-const storage = new CloudinaryStorage({
+// Profile picture storage configuration
+const profileStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'profiles',
-    allowed_formats: ['jpg', 'jpeg', 'png'],
+    allowed_formats: ['jpg', 'jpeg', 'png', 'svg'],
     transformation: [{ width: 500, height: 500, crop: 'limit' }]
+  }
+});
+
+// Booking images storage configuration
+const bookingStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'bookings',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'svg'],
+    transformation: [{ width: 1024, height: 1024, crop: 'limit' }]
+  }
+});
+
+// Service images storage configuration
+const serviceStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'services',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'svg'],
+    transformation: [{ width: 1024, height: 1024, crop: 'limit' }]
+  }
+});
+
+const reviewStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'reviews',
+    allowed_formats: ['jpg', 'jpeg', 'png'],
+    transformation: [{ width: 1024, height: 1024, crop: 'limit' }]
   }
 });
 
@@ -29,16 +58,43 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Export upload configuration
-const upload = multer({
-  storage: storage,
+// Export different upload configurations
+const profileUpload = multer({
+  storage: profileStorage,
   fileFilter: fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   }
 });
 
+const bookingUpload = multer({
+  storage: bookingStorage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+const serviceUpload = multer({
+  storage: serviceStorage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+const reviewUpload = multer({
+  storage: reviewStorage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
 module.exports = {
-  upload,
+  profileUpload,
+  bookingUpload,
+  serviceUpload,
+  reviewUpload,
   cloudinary
 };

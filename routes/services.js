@@ -1,11 +1,17 @@
 const express = require("express");
-const User = require('../models/User'); // Ensure User model is imported
+const User = require('../models/User');
 const Service = require("../models/Service");
 const Category = require("../models/Category");
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
+const { serviceUpload, cloudinary } = require("../utils/uploadConfig");
 
 const router = express.Router();
+
+const uploadFields = serviceUpload.fields([
+  { name: 'icon', maxCount: 1 },
+  { name: 'images', maxCount: 5 }
+]);
 
 // Get All Services
 router.get("/search", async (req, res) => {
@@ -53,38 +59,57 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Create Service (Admin or Service Provider Only)
+// Create Service with images (Admin or Service Provider Only)
 router.post(
   "/",
   authMiddleware,
   roleMiddleware(["admin", "service_provider"]),
+  uploadFields,
   async (req, res) => {
     try {
       const { name, description, category, price, availability } = req.body;
+      const providerId = req.user._id;
 
-      // Ensure the provider is attached to the request object by the middleware
-      const providerId = req.user._id; // `req.user` is set by authMiddleware
+      // Get uploaded image URLs
+      const imageUrls = req.files.images ? req.files.images.map(file => file.path) : [];
+      
+      // Get icon URL if uploaded
+      const iconUrl = req.files.icon ? req.files.icon[0].path : null;
 
-      // Check if category exists in the database
+      // Check if category exists
       const categoryObj = await Category.findOne({ name: category });
       if (!categoryObj) {
         return res.status(400).json({ error: "Category not found" });
       }
 
-      // Create a new service
+      // Create service with icon and images
       const service = new Service({
         name,
         description,
-        category: categoryObj._id, // Use ObjectId of the category
+        category: categoryObj._id,
         price,
         availability,
-        provider: providerId, // Assign the provider's ID
+        provider: providerId,
+        icon: iconUrl,
+        images: imageUrls,
       });
 
       await service.save();
       res.status(201).json(service);
     } catch (err) {
-      console.error(err);
+      // Delete uploaded files if service creation fails
+      if (req.files) {
+        if (req.files.icon) {
+          const publicId = req.files.icon[0].path.split('/').pop().split('.')[0];
+          await cloudinary.uploader.destroy(publicId);
+        }
+        if (req.files.images) {
+          for (const file of req.files.images) {
+            const publicId = file.path.split('/').pop().split('.')[0];
+            await cloudinary.uploader.destroy(publicId);
+          }
+        }
+      }
       res.status(500).json({ error: err.message });
     }
   }
@@ -133,24 +158,45 @@ router.delete(
   }
 );
 
-// Update Service Details
+// Update Service with images
 router.put(
   "/:id",
   authMiddleware,
   roleMiddleware(["admin", "service_provider"]),
+  uploadFields,
   async (req, res) => {
     try {
       const updates = req.body;
+      
+      // Get existing service
+      const existingService = await Service.findById(req.params.id);
+      if (!existingService) {
+        return res.status(404).json({ error: "Service not found" });
+      }
 
-      // If the category is provided as a name, find the category ID by name
+      // Handle new icon upload
+      if (req.files.icon) {
+        // Delete old icon if it exists
+        if (existingService.icon) {
+          const oldIconId = existingService.icon.split('/').pop().split('.')[0];
+          await cloudinary.uploader.destroy(oldIconId);
+        }
+        updates.icon = req.files.icon[0].path;
+      }
+
+      // Handle new images upload
+      if (req.files.images && req.files.images.length > 0) {
+        const newImages = req.files.images.map(file => file.path);
+        // Combine existing and new images, keeping only the last 5
+        updates.images = [...existingService.images, ...newImages].slice(-5);
+      }
+
+      // Handle category update
       if (updates.category) {
         const category = await Category.findOne({ name: updates.category });
-
         if (!category) {
           return res.status(400).json({ error: "Category not found" });
         }
-
-        // Replace category name with the category ID
         updates.category = category._id;
       }
 
@@ -162,19 +208,83 @@ router.put(
         return res.status(400).json({ error: "Invalid availability value" });
       }
 
-      // Find and update the service
+      // Update service
       const updatedService = await Service.findByIdAndUpdate(
         req.params.id,
         updates,
         { new: true }
       );
 
-      if (!updatedService) {
+      res.json(updatedService);
+    } catch (err) {
+      // Delete uploaded files if update fails
+      if (req.files) {
+        if (req.files.icon) {
+          const publicId = req.files.icon[0].path.split('/').pop().split('.')[0];
+          await cloudinary.uploader.destroy(publicId);
+        }
+        if (req.files.images) {
+          for (const file of req.files.images) {
+            const publicId = file.path.split('/').pop().split('.')[0];
+            await cloudinary.uploader.destroy(publicId);
+          }
+        }
+      }
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Add a new route to delete images from a service
+router.delete(
+  "/:id/images",
+  authMiddleware,
+  roleMiddleware(["admin", "service_provider"]),
+  async (req, res) => {
+    try {
+      const { imageUrls } = req.body;
+      const service = await Service.findById(req.params.id);
+
+      if (!service) {
         return res.status(404).json({ error: "Service not found" });
       }
 
-      // Send the updated service data
-      res.json(updatedService);
+      // Remove specified images
+      service.images = service.images.filter(img => !imageUrls.includes(img));
+      await service.save();
+
+      res.json({ message: "Images removed successfully", service });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Add a new route to delete icon
+router.delete(
+  "/:id/icon",
+  authMiddleware,
+  roleMiddleware(["admin", "service_provider"]),
+  async (req, res) => {
+    try {
+      const service = await Service.findById(req.params.id);
+
+      if (!service) {
+        return res.status(404).json({ error: "Service not found" });
+      }
+
+      if (service.icon) {
+        // Delete icon from Cloudinary
+        const publicId = service.icon.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(publicId);
+
+        // Remove icon from service
+        service.icon = null;
+        await service.save();
+      }
+
+      res.json({ message: "Icon removed successfully", service });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: err.message });

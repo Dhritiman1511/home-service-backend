@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
-const { upload, cloudinary } = require('../utils/uploadConfig');
+const { profileUpload, cloudinary } = require('../utils/uploadConfig');
 
 const router = express.Router();
 
@@ -60,7 +60,7 @@ router.put('/update', authMiddleware, async (req, res) => {
 // Upload profile picture
 router.post('/upload-profile-picture', 
   authMiddleware,
-  upload.single('profilePicture'),
+  profileUpload.single('profilePicture'),
   async (req, res) => {
     try {
       if (!req.file) {
