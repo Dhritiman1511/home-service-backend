@@ -25,7 +25,9 @@ router.post(
       });
 
       await newReview.save();
-      res.status(201).json(newReview);
+      // Populate the user field before sending response
+      const populatedReview = await Review.findById(newReview._id).populate("user", "name");
+      res.status(201).json(populatedReview);
     } catch (err) {
       // Delete uploaded images if review creation fails
       if (req.files) {
@@ -88,7 +90,9 @@ router.put('/:id', authMiddleware, reviewUpload.array('images', 5), async (req, 
     review.rating = updates.rating || review.rating;
     review.comment = updates.comment || review.comment;
 
-    const updatedReview = await review.save();
+    await review.save();
+    // Populate the user field before sending response
+    const updatedReview = await Review.findById(review._id).populate("user", "name");
     res.json(updatedReview);
   } catch (err) {
     // Delete newly uploaded images if update fails
