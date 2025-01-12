@@ -1,10 +1,10 @@
 {
   "name": "home-service-backend",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
     "dev": "vercel dev",
-    "start": "node server.js"
+    "start": "node index.js"
 
   },
   "keywords": [],
