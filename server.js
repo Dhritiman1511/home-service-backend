@@ -43,6 +43,11 @@ app.use('/api/categories', categoryRoutes);
 // Error handling
 app.use(errorHandler);
 
+// Add this near your other routes
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
