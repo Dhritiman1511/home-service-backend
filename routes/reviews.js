@@ -25,6 +25,12 @@ router.post(
   "/",
   authMiddleware,
   (req, res, next) => {
+    console.log('Raw request body:', req.body);
+    console.log('Files:', req.files);
+    console.log('Content-Type:', req.headers['content-type']);
+    next();
+  },
+  (req, res, next) => {
     console.log('Review post request received:', {
       userId: req.user?.id,
       body: req.body,
