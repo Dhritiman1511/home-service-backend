@@ -7,7 +7,8 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  timeout: 60000 // 60 seconds timeout
 });
 
 // Profile picture storage configuration
@@ -45,17 +46,26 @@ const reviewStorage = new CloudinaryStorage({
   params: {
     folder: 'reviews',
     allowed_formats: ['jpg', 'jpeg', 'png'],
-    transformation: [{ width: 1024, height: 1024, crop: 'limit' }]
+    transformation: [{ width: 1024, height: 1024, crop: 'limit' }],
+    // Add upload options
+    resource_type: 'auto',
+    timeout: 60000
   }
 });
 
 // File filter function
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Not an image! Please upload only images.'), false);
+  console.log('Processing file:', file.originalname);
+  
+  if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
+    return cb(new Error('Only jpg, jpeg, and png files are allowed!'), false);
   }
+  
+  if (file.size > 10 * 1024 * 1024) {
+    return cb(new Error('File size too large! Max 10MB allowed.'), false);
+  }
+  
+  cb(null, true);
 };
 
 // Export different upload configurations
@@ -87,7 +97,8 @@ const reviewUpload = multer({
   storage: reviewStorage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 5
   }
 });
 
