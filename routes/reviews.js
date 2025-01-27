@@ -24,90 +24,63 @@ const handleMulterError = (err, req, res, next) => {
 router.post(
   "/",
   authMiddleware,
-  (req, res, next) => {
-    console.log('Raw request body:', req.body);
-    console.log('Files:', req.files);
-    console.log('Content-Type:', req.headers['content-type']);
-    next();
-  },
-  (req, res, next) => {
-    console.log('Review post request received:', {
-      userId: req.user?.id,
-      body: req.body,
-      files: req.files ? 'Files present' : 'No files'
-    });
-    next();
-  },
   reviewUpload.array("images", 5),
-  handleMulterError,
   async (req, res) => {
-    console.log('Processing review with uploaded files:', {
+    console.log('Processing review request:', {
       body: req.body,
-      filesCount: req.files?.length || 0
+      files: req.files,
+      user: req.user?.id
     });
-
-    const { service, rating, comment } = req.body;
-
-    if (!service || !rating) {
-      return res.status(400).json({
-        message: 'Service and rating are required'
-      });
-    }
 
     try {
-      // Process images first
-      let imageUrls = [];
-      if (req.files && req.files.length > 0) {
-        console.log('Processing uploaded files...');
-        imageUrls = req.files.map(file => {
-          console.log('File path:', file.path);
-          return file.path;
+      // Validate required fields
+      if (!req.body.service || !req.body.rating) {
+        return res.status(400).json({
+          message: 'Service and rating are required'
         });
       }
 
-      // Create the review document
+      // Process uploaded images
+      const imageUrls = [];
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          if (file.path) {
+            imageUrls.push(file.path);
+          }
+        }
+      }
+
+      // Create review
       const reviewData = {
         user: req.user.id,
-        service,
-        rating: Number(rating),
-        comment: comment || '',
+        service: req.body.service,
+        rating: Number(req.body.rating),
+        comment: req.body.comment || '',
         images: imageUrls,
       };
-
-      console.log('Creating review with data:', reviewData);
 
       const newReview = new Review(reviewData);
       const savedReview = await newReview.save();
       
-      console.log('Review saved successfully:', savedReview._id);
-
-      // Populate and return
+      // Return populated review
       const populatedReview = await Review.findById(savedReview._id)
         .populate("user", "name")
         .lean();
 
-      console.log('Sending populated review response');
       res.status(201).json(populatedReview);
     } catch (err) {
-      console.error('Error in review creation:', {
-        error: err.message,
-        stack: err.stack
-      });
+      console.error('Review creation error:', err);
 
       // Cleanup uploaded images if review creation fails
-      if (req.files && req.files.length > 0) {
-        try {
-          await Promise.all(
-            req.files.map(file => {
-              if (file.path) {
-                const publicId = file.path.split('/').pop().split('.')[0];
-                return cloudinary.uploader.destroy(publicId);
-              }
-            })
-          );
-        } catch (cleanupErr) {
-          console.error('Error cleaning up images:', cleanupErr);
-        }
+      if (req.files?.length > 0) {
+        await Promise.allSettled(
+          req.files.map(file => {
+            if (file.path) {
+              const publicId = file.path.split('/').pop().split('.')[0];
+              return cloudinary.uploader.destroy(publicId);
+            }
+          })
+        );
       }
 
       res.status(500).json({

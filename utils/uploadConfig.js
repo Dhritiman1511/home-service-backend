@@ -8,7 +8,7 @@ cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
-  timeout: 60000 // 60 seconds timeout
+  timeout: 120000 // 60 seconds timeout
 });
 
 // Profile picture storage configuration
@@ -47,9 +47,7 @@ const reviewStorage = new CloudinaryStorage({
     folder: 'reviews',
     allowed_formats: ['jpg', 'jpeg', 'png'],
     transformation: [{ width: 1024, height: 1024, crop: 'limit' }],
-    // Add upload options
     resource_type: 'auto',
-    timeout: 60000
   }
 });
 
