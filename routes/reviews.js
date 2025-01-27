@@ -1,3 +1,4 @@
+//routes/reviews.js
 const express = require("express");
 const Review = require("../models/Review");
 const authMiddleware = require("../middleware/authMiddleware");
@@ -13,9 +14,19 @@ router.post(
     const { service, rating, comment } = req.body;
 
     try {
-      // Process uploaded images if any
-      const imageUrls = req.files ? req.files.map((file) => file.path) : [];
+      // Wait for all image uploads to complete before proceeding
+      let imageUrls = [];
+      if (req.files && req.files.length > 0) {
+        // Ensure all files are properly uploaded and URLs are available
+        imageUrls = req.files.map(file => {
+          if (!file.path) {
+            throw new Error('Image upload failed - URL not available');
+          }
+          return file.path;
+        });
+      }
 
+      // Create and save the review only after confirming all images are uploaded
       const newReview = new Review({
         user: req.user.id,
         service,
@@ -24,19 +35,41 @@ router.post(
         images: imageUrls,
       });
 
-      await newReview.save();
-      // Populate the user field before sending response
-      const populatedReview = await Review.findById(newReview._id).populate("user", "name");
+      const savedReview = await newReview.save();
+      
+      // Populate user details
+      const populatedReview = await Review.findById(savedReview._id)
+        .populate("user", "name")
+        .lean();
+
+      if (!populatedReview) {
+        throw new Error('Failed to retrieve saved review');
+      }
+
       res.status(201).json(populatedReview);
     } catch (err) {
-      // Delete uploaded images if review creation fails
-      if (req.files) {
-        for (const file of req.files) {
-          const publicId = file.filename;
-          await cloudinary.uploader.destroy(publicId);
-        }
+      console.error('Error creating review:', err);
+      
+      // Clean up any uploaded images if the review creation fails
+      if (req.files && req.files.length > 0) {
+        await Promise.allSettled(
+          req.files.map(async (file) => {
+            if (file.path) {
+              const publicId = file.path.split('/').pop().split('.')[0];
+              try {
+                await cloudinary.uploader.destroy(publicId);
+              } catch (deleteErr) {
+                console.error('Error deleting uploaded image:', deleteErr);
+              }
+            }
+          })
+        );
       }
-      res.status(400).json({ message: err.message });
+
+      res.status(500).json({ 
+        message: 'Failed to create review',
+        error: err.message 
+      });
     }
   }
 );
@@ -53,56 +86,80 @@ router.get("/:serviceId", async (req, res) => {
   }
 });
 
-// Update Review
+// Update Review with improved image handling
 router.put('/:id', authMiddleware, reviewUpload.array('images', 5), async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ error: 'Review not found' });
 
-    // Ensure only the review author can update
     if (req.user.id !== review.user.toString()) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const updates = req.body;
-    
-    // Handle image deletions if specified
+    // Handle image deletions first
     if (req.body.deletedImages) {
       const deletedImages = JSON.parse(req.body.deletedImages);
       
       // Delete images from Cloudinary
-      for (const imageUrl of deletedImages) {
-        const publicId = imageUrl.split('/').pop().split('.')[0];
-        await cloudinary.uploader.destroy(publicId);
-      }
+      await Promise.allSettled(
+        deletedImages.map(async (imageUrl) => {
+          const publicId = imageUrl.split('/').pop().split('.')[0];
+          try {
+            await cloudinary.uploader.destroy(publicId);
+          } catch (err) {
+            console.error('Error deleting image:', err);
+          }
+        })
+      );
       
-      // Remove deleted images from the review
       review.images = review.images.filter(img => !deletedImages.includes(img));
     }
 
-    // Add new images if uploaded
+    // Process new images
+    let newImageUrls = [];
     if (req.files && req.files.length > 0) {
-      const newImageUrls = req.files.map(file => file.path);
-      review.images = [...review.images, ...newImageUrls];
+      newImageUrls = req.files.map(file => {
+        if (!file.path) {
+          throw new Error('Image upload failed - URL not available');
+        }
+        return file.path;
+      });
     }
 
-    // Update other fields
-    review.rating = updates.rating || review.rating;
-    review.comment = updates.comment || review.comment;
+    // Update review with new data
+    review.rating = req.body.rating || review.rating;
+    review.comment = req.body.comment || review.comment;
+    review.images = [...review.images, ...newImageUrls];
 
-    await review.save();
-    // Populate the user field before sending response
-    const updatedReview = await Review.findById(review._id).populate("user", "name");
-    res.json(updatedReview);
+    const updatedReview = await review.save();
+    const populatedReview = await Review.findById(updatedReview._id)
+      .populate("user", "name")
+      .lean();
+
+    res.json(populatedReview);
   } catch (err) {
-    // Delete newly uploaded images if update fails
-    if (req.files) {
-      for (const file of req.files) {
-        const publicId = file.filename;
-        await cloudinary.uploader.destroy(publicId);
-      }
+    console.error('Error updating review:', err);
+    
+    // Clean up any newly uploaded images if the update fails
+    if (req.files && req.files.length > 0) {
+      await Promise.allSettled(
+        req.files.map(async (file) => {
+          if (file.path) {
+            const publicId = file.path.split('/').pop().split('.')[0];
+            try {
+              await cloudinary.uploader.destroy(publicId);
+            } catch (deleteErr) {
+              console.error('Error deleting uploaded image:', deleteErr);
+            }
+          }
+        })
+      );
     }
-    res.status(500).json({ error: err.message });
+
+    res.status(500).json({ 
+      message: 'Failed to update review',
+      error: err.message 
+    });
   }
 });
 
